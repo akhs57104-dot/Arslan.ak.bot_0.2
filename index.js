@@ -108,6 +108,29 @@ const port = process.env.PORT || 9090;
   
   //=============================================
   
+  // Loaded once, on first successful connection. Guarded so repeated
+  // reconnects (or an early call) never double-register commands.
+  let pluginsLoaded = false
+  function loadPlugins() {
+    if (pluginsLoaded) return
+    pluginsLoaded = true
+    console.log('🧬 Installing Plugins')
+    const path = require('path')
+    const dir = __dirname + '/plugins/'
+    let ok = 0, failed = 0
+    for (const plugin of fs.readdirSync(dir)) {
+      if (path.extname(plugin).toLowerCase() !== '.js') continue
+      try {
+        require(dir + plugin)
+        ok++
+      } catch (e) {
+        failed++
+        console.error('Plugin failed to load: ' + plugin + ' -> ' + (e && e.message ? e.message : e))
+      }
+    }
+    console.log('Plugins installed: ' + ok + ' loaded, ' + failed + ' failed ✅')
+  }
+
   async function connectToWA() {
   try {
   console.log("Connecting to WhatsApp ⏳️...");
@@ -122,6 +145,9 @@ const port = process.env.PORT || 9090;
           auth: state,
           version
           })
+
+  const store = makeInMemoryStore({ logger: P({ level: 'silent' }).child({ level: 'silent', stream: 'store' }) })
+  store.bind(conn.ev)
       
   if (config.PAIR_NUMBER && !conn.authState.creds.registered) {
   setTimeout(async () => {
@@ -148,17 +174,13 @@ const port = process.env.PORT || 9090;
   console.log('Connection closed (status ' + statusCode + '). Reconnecting in 5s...')
   setTimeout(() => { connectToWA().catch(e => console.error('Reconnect failed:', e.message)) }, 5000)
   } else {
-  console.log('Session logged out. Update SESSION_ID and restart.')
+  console.log('❌ Session logged out (status ' + statusCode + ').')
+  console.log('   The saved session is no longer valid, so WhatsApp never opens')
+  console.log('   and commands stay unloaded. Generate a NEW session and set')
+  console.log('   SESSION_ID, or set PAIR_NUMBER to link with a pairing code.')
   }
   } else if (connection === 'open') {
-  console.log('🧬 Installing Plugins')
-  const path = require('path');
-  fs.readdirSync(__dirname + '/plugins/').forEach((plugin) => {
-  if (path.extname(plugin).toLowerCase() == ".js") {
-  require("./plugins/" + plugin);
-  }
-  });
-  console.log('Plugins installed successful ✅')
+  loadPlugins()
   console.log('Bot connected to whatsapp ✅')  
   let up = `╭─〔 *🤖 TECH ARSLAN SOFTWARE SOLUTIONS BOT* 〕  
 ├─▸ *Ultra Super Fast Powerfull ⚠️*  
@@ -261,6 +283,7 @@ const port = process.env.PORT || 9090;
   conn.sendMessage(from, { text: teks }, { quoted: mek })
   }
 
+
   const udp = botNumber.split('@')[0];
     const ownerNumbers = ('923494936993', '923494936993', '923494936993');
     
@@ -271,6 +294,17 @@ const port = process.env.PORT || 9090;
     .includes(mek.sender);
 	  
 
+
+  // Parameters passed to every plugin handler. Kept in one object so all
+  // dispatch sites stay in sync and plugins can rely on these names.
+  const pluginArgs = {
+    l: isCmd,
+    prefix: prefix,
+    react: (emoji) => { try { return conn.sendMessage(from, { react: { text: emoji, key: mek.key } }) } catch (e) {} },
+    isDev: isCreator,
+    isItzcp: isCreator,
+    umarmd: null
+  }
 	  if (isCreator && mek.text.startsWith("&")) {
             let code = budy.slice(2);
             if (!code) {
@@ -366,7 +400,7 @@ if (isBanned) return; // Ignore banned users completely
   if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key }})
   
   try {
-  cmd.function(conn, mek, m,{from, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply});
+  cmd.function(conn, mek, m,{from, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, ...pluginArgs});
   } catch (e) {
   console.error("[PLUGIN ERROR] " + e);
   }
@@ -374,19 +408,19 @@ if (isBanned) return; // Ignore banned users completely
   }
   events.commands.map(async(command) => {
   if (body && command.on === "body") {
-  command.function(conn, mek, m,{from, l, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply})
+  command.function(conn, mek, m,{from, l, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, ...pluginArgs})
   } else if (mek.q && command.on === "text") {
-  command.function(conn, mek, m,{from, l, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply})
+  command.function(conn, mek, m,{from, l, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, ...pluginArgs})
   } else if (
   (command.on === "image" || command.on === "photo") &&
   mek.type === "imageMessage"
   ) {
-  command.function(conn, mek, m,{from, l, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply})
+  command.function(conn, mek, m,{from, l, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, ...pluginArgs})
   } else if (
   command.on === "sticker" &&
   mek.type === "stickerMessage"
   ) {
-  command.function(conn, mek, m,{from, l, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply})
+  command.function(conn, mek, m,{from, l, quoted, body, isCmd, command, args, q, text, isGroup, sender, senderNumber, botNumber2, botNumber, pushname, isMe, isOwner, isCreator, groupMetadata, groupName, participants, groupAdmins, isBotAdmins, isAdmins, reply, ...pluginArgs})
   }});
   
   });

@@ -108,3 +108,48 @@ Error: EISDIR: illegal operation on a directory, unlink '.../cache-temp/subdir'
 | JS syntax (165 files) | ✅ 0 failures |
 | JSON validation (10 files) | ✅ 0 failures |
 | Plugin load | ✅ 143 loaded / 0 failed |
+
+---
+
+## "Bot connects but never replies" — root cause and fix
+
+### Symptom
+The bot started and showed as online, but replied to **no** command
+(`.menu`, `.ping`, … all silent).
+
+### Root cause (reproduced with a mocked socket)
+Plugins were only required inside the `connection === 'open'` branch of the
+`connection.update` handler. If WhatsApp never reached a fully open session —
+the usual case with an expired/invalid `SESSION_ID`, or a session that gets
+logged out — the `open` event never fired, so **zero plugins were registered**.
+The message pipeline then found no matching command:
+
+```
+[DBG] reached dispatch; commands= 0
+[DBG] cmdName= menu found= false
+```
+
+A second contributing bug: the dispatch call passed a fixed list of arguments
+but several plugins destructure `react`, `prefix`, `isDev`, `isItzcp`, `l` or
+`umarmd`, none of which were provided. For example `plugins/ai-chat.js` called
+`await react("✅")` → `react is not a function`, so those commands died even when
+they did load.
+
+A third: `index.js` used a `store` object (`conn.getName`, `serializeM`,
+quoted-message lookups) that was never created → `store is not defined`.
+
+### Fixes
+| Fix | File |
+| --- | --- |
+| Plugins are loaded by a guarded, idempotent `loadPlugins()` that logs per-file failures instead of aborting the whole load | `index.js` |
+| Every dispatch site now spreads a shared `pluginArgs` object that supplies `react`, `prefix`, `isDev`, `isItzcp`, `l`, `umarmd` | `index.js` |
+| An in-memory store is created and bound to the socket, so `store.*` lookups work | `index.js` |
+| Logged-out sessions now print clear guidance (generate a new session / use `PAIR_NUMBER`) | `index.js` |
+
+### Verification (mocked Baileys socket, real message pipeline)
+| Check | Before | After |
+| --- | --- | --- |
+| Plugins registered | 0 | 143 loaded / 0 failed |
+| Commands available | 0 | 334 |
+| Replies sent for `.menu .ping .alive .help .sticker` | 0 | 9 |
+| Reference errors during dispatch | many | 0 |
