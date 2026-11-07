@@ -891,6 +891,8 @@ if (isBanned) return; // Ignore banned users completely
 </div></body></html>`);
   });
   app.listen(port, () => console.log(`Server listening on port http://localhost:${port}`));
+  // Register commands up front so they exist even before the socket opens.
+  loadPlugins();
   if (config.SESSION_ID || config.PAIR_NUMBER || fs.existsSync(SESSION_DIR + '/creds.json')) {
     setTimeout(() => {
       connectToWA().catch(e => console.error('Startup connect failed:', e.message))
