@@ -183,6 +183,32 @@ docker run -d --name tech-arslan-bot \
 
 ---
 
+## 🚂 Deploying on Railway / Render / Koyeb
+
+The repo ships `nixpacks.toml` (installs Node.js 20 + ffmpeg), `Procfile` and
+`Dockerfile`, so Railway builds work out of the box.
+
+Set these variables in the platform dashboard:
+
+| Variable | Value |
+| --- | --- |
+| `SESSION_ID` | Your session string **or** leave empty and set `PAIR_NUMBER` |
+| `PAIR_NUMBER` | Your WhatsApp number, digits only, e.g. `923494936993` |
+| `SYNC_FULL_HISTORY` | `false` (keeps memory low on small plans) |
+
+Notes for free/hobby plans:
+
+- **Sessions live in `sessions/`.** Without a persistent volume the container is
+  rebuilt from scratch, so you must re-pair after every redeploy. Attach a
+  Railway volume (or Render disk) mounted at `/app/sessions` for persistence.
+- **Free plans sleep.** Railway trial, Render free and Koyeb free instances
+  sleep or reset, which drops the WhatsApp socket. Use a VPS or a paid plan for
+  24/7 uptime.
+- **ffmpeg** is installed by `nixpacks.toml` / `Dockerfile`; if you use a custom
+  buildpack, install it yourself or media commands will fail.
+
+---
+
 ## ⚙️ Configuration
 
 Copy the example file and edit it.

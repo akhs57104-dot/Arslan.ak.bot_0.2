@@ -59,3 +59,52 @@ which features need external API keys or reachable third-party services.
   bot's HTTP calls were not exercised per-command).
 
 No feature was reported as working without the check listed above.
+
+---
+
+## Hosting crash fix (Railway / Render / Koyeb / Docker)
+
+### Symptom
+After deploying to Railway the process crashed and stopped responding.
+
+### Root cause (reproduced locally)
+`index.js` ran a 5-minute temp-cleanup timer that called `fs.unlink` on every
+entry in `os.tmpdir()/cache-temp`. As soon as a sub-directory existed there,
+`fs.unlink` threw `EISDIR` inside a callback that used `throw err`, which
+crashed the whole Node process. The same pattern was used for the readdir error.
+
+Reproduction (pre-fix):
+
+```
+Error: EISDIR: illegal operation on a directory, unlink '.../cache-temp/subdir'
+    at ... index.js
+```
+
+### Fixes applied
+| Fix | File |
+| --- | --- |
+| Temp cleanup uses `fs.rm(..., { recursive: true, force: true })` and logs errors instead of throwing | `index.js` |
+| `tempDir` created with `{ recursive: true }` | `index.js` |
+| Global `uncaughtException` / `unhandledRejection` handlers keep the bot alive | `index.js` |
+| `sessions/` created recursively before session download | `index.js` |
+| Mega session download logs the error instead of `throw err` | `index.js` |
+| Reconnect no longer calls `connectToWA()` synchronously from its own event handler; uses a 5s backoff | `index.js` |
+| `connectToWA()` body wrapped in try/catch | `index.js` |
+| Plugin loading uses an absolute path (`__dirname + '/plugins/'`) | `index.js` |
+| No session configured → bot stays up (web server) instead of exiting; WhatsApp connects only when a session or `PAIR_NUMBER` exists | `index.js` |
+| `syncFullHistory` now defaults to `false` (env `SYNC_FULL_HISTORY`), reducing memory on small plans | `index.js` |
+
+### Deployment assets added
+- `nixpacks.toml` — installs Node.js 20 + ffmpeg on Railway/Nixpacks builds
+- `Procfile` — `web: node index.js` for buildpack platforms
+- `.dockerignore` — keeps `node_modules`, `sessions/`, `database.db` and secrets out of the image
+
+### Verification (post-fix)
+| Check | Result |
+| --- | --- |
+| Boot without session | ✅ stays up, HTTP 200, "Bot is idle" logged |
+| Temp cleanup with a sub-directory present | ✅ no crash, directory removed |
+| Boot with `PAIR_NUMBER` | ✅ stays up, reconnect loop with backoff |
+| JS syntax (165 files) | ✅ 0 failures |
+| JSON validation (10 files) | ✅ 0 failures |
+| Plugin load | ✅ 143 loaded / 0 failed |

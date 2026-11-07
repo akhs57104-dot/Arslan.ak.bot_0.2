@@ -50,19 +50,28 @@ const {
   const path = require('path')
   const prefix = config.PREFIX
   
+  // Keep the bot alive on transient errors so a single failed command or
+  // network hiccup never takes the whole process down.
+  process.on('uncaughtException', (err) => {
+      console.error('uncaughtException:', err && err.stack ? err.stack : err);
+  });
+  process.on('unhandledRejection', (reason) => {
+      console.error('unhandledRejection:', reason);
+  });
+
   const ownerNumber = ['923494936993']
   
   const tempDir = path.join(os.tmpdir(), 'cache-temp')
   if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir)
+      fs.mkdirSync(tempDir, { recursive: true })
   }
   
   const clearTempDir = () => {
       fs.readdir(tempDir, (err, files) => {
-          if (err) throw err;
+          if (err) return console.error('temp cleanup readdir failed:', err.message);
           for (const file of files) {
-              fs.unlink(path.join(tempDir, file), err => {
-                  if (err) throw err;
+              fs.rm(path.join(tempDir, file), { recursive: true, force: true }, (e) => {
+                  if (e) console.error('temp cleanup remove failed:', e.message);
               });
           }
       });
@@ -73,12 +82,15 @@ const {
   
   //===================SESSION-AUTH============================
 const SESSION_DIR = __dirname + '/sessions'
+if (!fs.existsSync(SESSION_DIR)) {
+  fs.mkdirSync(SESSION_DIR, { recursive: true })
+}
 if (!fs.existsSync(SESSION_DIR + '/creds.json')) {
   if (config.SESSION_ID) {
     const sessdata = config.SESSION_ID.replace("IK~", '');
     const filer = File.fromURL(`https://mega.nz/file/${sessdata}`)
     filer.download((err, data) => {
-      if (err) throw err
+      if (err) return console.error('Session download failed:', err.message || err)
       fs.writeFile(SESSION_DIR + '/creds.json', data, () => {
         console.log("Session downloaded ✅")
       })
@@ -86,7 +98,7 @@ if (!fs.existsSync(SESSION_DIR + '/creds.json')) {
   } else if (config.PAIR_NUMBER) {
     console.log('No session found. Will request a pairing code for ' + config.PAIR_NUMBER + ' on connect.')
   } else {
-    return console.log('Please add your session to SESSION_ID env, or set PAIR_NUMBER to pair with a phone number !!')
+    console.log('WARNING: no SESSION_ID or PAIR_NUMBER set. The web server is running, but WhatsApp will not connect until a session is configured.')
   }
 }
 
@@ -97,6 +109,7 @@ const port = process.env.PORT || 9090;
   //=============================================
   
   async function connectToWA() {
+  try {
   console.log("Connecting to WhatsApp ⏳️...");
   const { state, saveCreds } = await useMultiFileAuthState(__dirname + '/sessions/')
   var { version } = await fetchLatestBaileysVersion()
@@ -105,7 +118,7 @@ const port = process.env.PORT || 9090;
           logger: P({ level: 'silent' }),
           printQRInTerminal: false,
           browser: Browsers.macOS("Firefox"),
-          syncFullHistory: true,
+          syncFullHistory: String(process.env.SYNC_FULL_HISTORY || 'false') === 'true',
           auth: state,
           version
           })
@@ -132,14 +145,15 @@ const port = process.env.PORT || 9090;
   if (connection === 'close') {
   const statusCode = lastDisconnect?.error?.output?.statusCode
   if (statusCode !== DisconnectReason.loggedOut) {
-  connectToWA()
+  console.log('Connection closed (status ' + statusCode + '). Reconnecting in 5s...')
+  setTimeout(() => { connectToWA().catch(e => console.error('Reconnect failed:', e.message)) }, 5000)
   } else {
   console.log('Session logged out. Update SESSION_ID and restart.')
   }
   } else if (connection === 'open') {
   console.log('🧬 Installing Plugins')
   const path = require('path');
-  fs.readdirSync("./plugins/").forEach((plugin) => {
+  fs.readdirSync(__dirname + '/plugins/').forEach((plugin) => {
   if (path.extname(plugin).toLowerCase() == ".js") {
   require("./plugins/" + plugin);
   }
@@ -813,7 +827,10 @@ if (isBanned) return; // Ignore banned users completely
             return status;
         };
     conn.serializeM = mek => sms(conn, mek, store);
+  } catch (e) {
+    console.error('connectToWA failed:', e && e.message ? e.message : e);
   }
+}
   
   app.get("/", (req, res) => {
   res.send(`<!DOCTYPE html>
@@ -840,6 +857,10 @@ if (isBanned) return; // Ignore banned users completely
 </div></body></html>`);
   });
   app.listen(port, () => console.log(`Server listening on port http://localhost:${port}`));
-  setTimeout(() => {
-  connectToWA()
-  }, 4000);
+  if (config.SESSION_ID || config.PAIR_NUMBER || fs.existsSync(SESSION_DIR + '/creds.json')) {
+    setTimeout(() => {
+      connectToWA().catch(e => console.error('Startup connect failed:', e.message))
+    }, 4000);
+  } else {
+    console.log('Bot is idle: set SESSION_ID or PAIR_NUMBER and restart to connect to WhatsApp.');
+  }

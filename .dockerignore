@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+sessions
+logs
+temp
+database.db
+*.db
+.git
+.gitignore
+.env
+config.env
+test
+tests
