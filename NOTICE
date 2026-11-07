@@ -1,0 +1,33 @@
+# NOTICE
+
+## TECH ARSLAN SOFTWARE SOLUTIONS
+
+This product is a rebranded and customized distribution of an Apache-2.0
+licensed WhatsApp Multi-Device bot.
+
+### Original project
+
+- Project: KHAN-MD
+- Original author: Jawad Tech (JawadYT36) <jawadtechxd@gmail.com>
+- Original repository: https://github.com/JawadTechYT/KHAN-MD
+- Original license: Apache License 2.0 (see `LICENSE`)
+
+The original copyright, license text, and attribution notices are retained in
+full as required by Section 4 of the Apache License 2.0.
+
+### Modifications
+
+Rebranding, additional AI provider integration, VPS deployment tooling,
+documentation, and visual assets were produced by:
+
+- TECH ARSLAN SOFTWARE SOLUTIONS
+- Developed and customized by TECH HACKER
+- Website: https://techarslan.kesug.com
+- Email: hackertech152@gmail.com
+- WhatsApp: 03494936993 (international: +92 349 4936993)
+
+### Third-party components
+
+All third-party npm dependencies keep their own licenses. See `package.json`
+for the dependency list and each package's own LICENSE file under
+`node_modules/` after installation.

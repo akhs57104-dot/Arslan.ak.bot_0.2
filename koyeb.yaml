@@ -1,0 +1,14 @@
+name: tech-arslan-software-solutions
+services:
+  - name: tech-arslan-service
+    type: web
+    ports:
+      - 9090
+    routes:
+      - path: "/"
+    build:
+      type: docker
+      dockerfile: ./Dockerfile
+    regions:
+      - fra
+      - sin

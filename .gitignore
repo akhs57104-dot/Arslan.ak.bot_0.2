@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Runtime data
+tmp/
+temp/
+cache-temp/
+
+# Session / auth state
+session/
+sessions/
+auth_info_baileys/
+
+# Environment variables
+.env
+config.env
+
+# SQLite runtime database
+database.db
+*.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# PM2
+.pm2/
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
